@@ -1,4 +1,4 @@
-// Copyright 2020 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -61,5 +61,11 @@ func Test_ReadCloser(t *testing.T) {
 		t.Assert(r, []byte{1, 2, 3, 4})
 		r, _ = ioutil.ReadAll(body)
 		t.Assert(r, []byte{1, 2, 3, 4})
+	})
+}
+
+func Test_RemoveSymbols(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		t.Assert(utils.RemoveSymbols(`-a-b._a c1!@#$%^&*()_+:";'.,'01`), `abac101`)
 	})
 }

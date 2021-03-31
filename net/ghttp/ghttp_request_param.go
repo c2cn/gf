@@ -1,4 +1,4 @@
-// Copyright 2019 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -139,14 +139,14 @@ func (r *Request) GetVar(key string, def ...interface{}) *gvar.Var {
 
 // GetRaw is alias of GetBody.
 // See GetBody.
-// Deprecated.
+// Deprecated, use GetBody instead.
 func (r *Request) GetRaw() []byte {
 	return r.GetBody()
 }
 
 // GetRawString is alias of GetBodyString.
 // See GetBodyString.
-// Deprecated.
+// Deprecated, use GetBodyString instead.
 func (r *Request) GetRawString() string {
 	return r.GetBodyString()
 }
@@ -278,13 +278,6 @@ func (r *Request) GetMapStrStr(def ...map[string]interface{}) map[string]string 
 // GetStruct is an alias and convenient function for GetRequestStruct.
 // See GetRequestStruct.
 func (r *Request) GetStruct(pointer interface{}, mapping ...map[string]string) error {
-	return r.GetRequestStruct(pointer, mapping...)
-}
-
-// GetToStruct is an alias and convenient function for GetRequestStruct.
-// See GetRequestToStruct.
-// Deprecated.
-func (r *Request) GetToStruct(pointer interface{}, mapping ...map[string]string) error {
 	return r.GetRequestStruct(pointer, mapping...)
 }
 

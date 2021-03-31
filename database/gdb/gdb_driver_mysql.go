@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -8,10 +8,9 @@ package gdb
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
+	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
-	"github.com/gogf/gf/os/gcache"
 	"github.com/gogf/gf/text/gregex"
 	"github.com/gogf/gf/text/gstr"
 
@@ -32,6 +31,7 @@ func (d *DriverMysql) New(core *Core, node *ConfigNode) (DB, error) {
 }
 
 // Open creates and returns a underlying sql.DB object for mysql.
+// Note that it converts time.Time argument to local timezone in default.
 func (d *DriverMysql) Open(config *ConfigNode) (*sql.DB, error) {
 	var source string
 	if config.LinkInfo != "" {
@@ -42,7 +42,7 @@ func (d *DriverMysql) Open(config *ConfigNode) (*sql.DB, error) {
 		}
 	} else {
 		source = fmt.Sprintf(
-			"%s:%s@tcp(%s:%s)/%s?charset=%s&multiStatements=true&parseTime=true&loc=Local",
+			"%s:%s@tcp(%s:%s)/%s?charset=%s",
 			config.User, config.Pass, config.Host, config.Port, config.Name, config.Charset,
 		)
 	}
@@ -52,6 +52,21 @@ func (d *DriverMysql) Open(config *ConfigNode) (*sql.DB, error) {
 	} else {
 		return nil, err
 	}
+}
+
+// FilteredLinkInfo retrieves and returns filtered `linkInfo` that can be using for
+// logging or tracing purpose.
+func (d *DriverMysql) FilteredLinkInfo() string {
+	linkInfo := d.GetConfig().LinkInfo
+	if linkInfo == "" {
+		return ""
+	}
+	s, _ := gregex.ReplaceString(
+		`(.+?):(.+)@tcp(.+)`,
+		`$1:xxx@tcp$3`,
+		linkInfo,
+	)
+	return s
 }
 
 // GetChars returns the security char for this type of database.
@@ -68,11 +83,11 @@ func (d *DriverMysql) HandleSqlBeforeCommit(link Link, sql string, args []interf
 // It's mainly used in cli tool chain for automatically generating the models.
 func (d *DriverMysql) Tables(schema ...string) (tables []string, err error) {
 	var result Result
-	link, err := d.DB.GetSlave(schema...)
+	link, err := d.db.GetSlave(schema...)
 	if err != nil {
 		return nil, err
 	}
-	result, err = d.DB.DoGetAll(link, `SHOW TABLES`)
+	result, err = d.db.DoGetAll(link, `SHOW TABLES`)
 	if err != nil {
 		return
 	}
@@ -97,26 +112,26 @@ func (d *DriverMysql) TableFields(table string, schema ...string) (fields map[st
 	charL, charR := d.GetChars()
 	table = gstr.Trim(table, charL+charR)
 	if gstr.Contains(table, " ") {
-		return nil, errors.New("function TableFields supports only single table operations")
+		return nil, gerror.New("function TableFields supports only single table operations")
 	}
 	checkSchema := d.schema.Val()
 	if len(schema) > 0 && schema[0] != "" {
 		checkSchema = schema[0]
 	}
-	v, _ := gcache.GetOrSetFunc(
-		fmt.Sprintf(`mysql_table_fields_%s_%s`, table, checkSchema),
+	v, _ := internalCache.GetOrSetFunc(
+		fmt.Sprintf(`mysql_table_fields_%s_%s@group:%s`, table, checkSchema, d.GetGroup()),
 		func() (interface{}, error) {
 			var (
 				result Result
 				link   *sql.DB
 			)
-			link, err = d.DB.GetSlave(checkSchema)
+			link, err = d.db.GetSlave(checkSchema)
 			if err != nil {
 				return nil, err
 			}
-			result, err = d.DB.DoGetAll(
+			result, err = d.db.DoGetAll(
 				link,
-				fmt.Sprintf(`SHOW FULL COLUMNS FROM %s`, d.DB.QuoteWord(table)),
+				fmt.Sprintf(`SHOW FULL COLUMNS FROM %s`, d.db.QuoteWord(table)),
 			)
 			if err != nil {
 				return nil, err

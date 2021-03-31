@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -11,12 +11,14 @@ import (
 	"github.com/gogf/gf/container/gset"
 	"github.com/gogf/gf/internal/empty"
 	"github.com/gogf/gf/os/gtime"
+	"github.com/gogf/gf/text/gregex"
 	"github.com/gogf/gf/text/gstr"
 	"github.com/gogf/gf/util/gconv"
+	"github.com/gogf/gf/util/gutil"
 	"time"
 )
 
-// getModel creates and returns a cloned model of current model if <safe> is true, or else it returns
+// getModel creates and returns a cloned model of current model if `safe` is true, or else it returns
 // the current model.
 func (m *Model) getModel() *Model {
 	if !m.safe {
@@ -24,6 +26,44 @@ func (m *Model) getModel() *Model {
 	} else {
 		return m.Clone()
 	}
+}
+
+// mappingAndFilterToTableFields mappings and changes given field name to really table field name.
+// Eg:
+// ID        -> id
+// NICK_Name -> nickname
+func (m *Model) mappingAndFilterToTableFields(fields []string, filter bool) []string {
+	fieldsMap, err := m.db.TableFields(m.tables)
+	if err != nil || len(fieldsMap) == 0 {
+		return fields
+	}
+	var (
+		inputFieldsArray  = gstr.SplitAndTrim(gstr.Join(fields, ","), ",")
+		outputFieldsArray = make([]string, 0, len(inputFieldsArray))
+	)
+	fieldsKeyMap := make(map[string]interface{}, len(fieldsMap))
+	for k, _ := range fieldsMap {
+		fieldsKeyMap[k] = nil
+	}
+	for _, field := range inputFieldsArray {
+		if _, ok := fieldsKeyMap[field]; !ok {
+			if !gregex.IsMatchString(regularFieldNameWithoutDotRegPattern, field) {
+				// Eg: user.id, user.name
+				outputFieldsArray = append(outputFieldsArray, field)
+				continue
+			} else {
+				// Eg: id, name
+				if foundKey, _ := gutil.MapPossibleItemByKey(fieldsKeyMap, field); foundKey != "" {
+					outputFieldsArray = append(outputFieldsArray, foundKey)
+				} else if !filter {
+					outputFieldsArray = append(outputFieldsArray, field)
+				}
+			}
+		} else {
+			outputFieldsArray = append(outputFieldsArray, field)
+		}
+	}
+	return outputFieldsArray
 }
 
 // filterDataForInsertOrUpdate does filter feature with data for inserting/updating operations.
@@ -57,7 +97,7 @@ func (m *Model) doMappingAndFilterForInsertOrUpdateDataMap(data Map, allowOmitEm
 		return nil, err
 	}
 	// Remove key-value pairs of which the value is empty.
-	if allowOmitEmpty && m.option&OPTION_OMITEMPTY > 0 {
+	if allowOmitEmpty && m.option&OptionOmitEmpty > 0 {
 		tempMap := make(Map, len(data))
 		for k, v := range data {
 			if empty.IsEmpty(v) {
@@ -112,8 +152,8 @@ func (m *Model) doMappingAndFilterForInsertOrUpdateDataMap(data Map, allowOmitEm
 	return data, nil
 }
 
-// getLink returns the underlying database link object with configured <linkType> attribute.
-// The parameter <master> specifies whether using the master node if master-slave configured.
+// getLink returns the underlying database link object with configured `linkType` attribute.
+// The parameter `master` specifies whether using the master node if master-slave configured.
 func (m *Model) getLink(master bool) Link {
 	if m.tx != nil {
 		return m.tx.tx
@@ -121,19 +161,19 @@ func (m *Model) getLink(master bool) Link {
 	linkType := m.linkType
 	if linkType == 0 {
 		if master {
-			linkType = gLINK_TYPE_MASTER
+			linkType = linkTypeMaster
 		} else {
-			linkType = gLINK_TYPE_SLAVE
+			linkType = linkTypeSlave
 		}
 	}
 	switch linkType {
-	case gLINK_TYPE_MASTER:
+	case linkTypeMaster:
 		link, err := m.db.GetMaster(m.schema)
 		if err != nil {
 			panic(err)
 		}
 		return link
-	case gLINK_TYPE_SLAVE:
+	case linkTypeSlave:
 		link, err := m.db.GetSlave(m.schema)
 		if err != nil {
 			panic(err)
@@ -161,17 +201,17 @@ func (m *Model) getPrimaryKey() string {
 }
 
 // formatCondition formats where arguments of the model and returns a new condition sql and its arguments.
-// Note that this function does not change any attribute value of the <m>.
+// Note that this function does not change any attribute value of the `m`.
 //
-// The parameter <limit1> specifies whether limits querying only one record if m.limit is not set.
-func (m *Model) formatCondition(limit1 bool) (conditionWhere string, conditionExtra string, conditionArgs []interface{}) {
+// The parameter `limit1` specifies whether limits querying only one record if m.limit is not set.
+func (m *Model) formatCondition(limit1 bool, isCountStatement bool) (conditionWhere string, conditionExtra string, conditionArgs []interface{}) {
 	if len(m.whereHolder) > 0 {
 		for _, v := range m.whereHolder {
 			switch v.operator {
-			case gWHERE_HOLDER_WHERE:
+			case whereHolderWhere:
 				if conditionWhere == "" {
 					newWhere, newArgs := formatWhere(
-						m.db, v.where, v.args, m.option&OPTION_OMITEMPTY > 0,
+						m.db, v.where, v.args, m.option&OptionOmitEmpty > 0,
 					)
 					if len(newWhere) > 0 {
 						conditionWhere = newWhere
@@ -181,9 +221,9 @@ func (m *Model) formatCondition(limit1 bool) (conditionWhere string, conditionEx
 				}
 				fallthrough
 
-			case gWHERE_HOLDER_AND:
+			case whereHolderAnd:
 				newWhere, newArgs := formatWhere(
-					m.db, v.where, v.args, m.option&OPTION_OMITEMPTY > 0,
+					m.db, v.where, v.args, m.option&OptionOmitEmpty > 0,
 				)
 				if len(newWhere) > 0 {
 					if len(conditionWhere) == 0 {
@@ -196,9 +236,9 @@ func (m *Model) formatCondition(limit1 bool) (conditionWhere string, conditionEx
 					conditionArgs = append(conditionArgs, newArgs...)
 				}
 
-			case gWHERE_HOLDER_OR:
+			case whereHolderOr:
 				newWhere, newArgs := formatWhere(
-					m.db, v.where, v.args, m.option&OPTION_OMITEMPTY > 0,
+					m.db, v.where, v.args, m.option&OptionOmitEmpty > 0,
 				)
 				if len(newWhere) > 0 {
 					if len(conditionWhere) == 0 {
@@ -213,43 +253,61 @@ func (m *Model) formatCondition(limit1 bool) (conditionWhere string, conditionEx
 			}
 		}
 	}
-	if conditionWhere != "" {
-		conditionWhere = " WHERE " + conditionWhere
+	// Soft deletion.
+	softDeletingCondition := m.getConditionForSoftDeleting()
+	if !m.unscoped && softDeletingCondition != "" {
+		if conditionWhere == "" {
+			conditionWhere = fmt.Sprintf(` WHERE %s`, softDeletingCondition)
+		} else {
+			conditionWhere = fmt.Sprintf(` WHERE (%s) AND %s`, conditionWhere, softDeletingCondition)
+		}
+	} else {
+		if conditionWhere != "" {
+			conditionWhere = " WHERE " + conditionWhere
+		}
 	}
+	// GROUP BY.
 	if m.groupBy != "" {
 		conditionExtra += " GROUP BY " + m.groupBy
 	}
-	if m.orderBy != "" {
-		conditionExtra += " ORDER BY " + m.orderBy
-	}
+	// HAVING.
 	if len(m.having) > 0 {
 		havingStr, havingArgs := formatWhere(
-			m.db, m.having[0], gconv.Interfaces(m.having[1]), m.option&OPTION_OMITEMPTY > 0,
+			m.db, m.having[0], gconv.Interfaces(m.having[1]), m.option&OptionOmitEmpty > 0,
 		)
 		if len(havingStr) > 0 {
 			conditionExtra += " HAVING " + havingStr
 			conditionArgs = append(conditionArgs, havingArgs...)
 		}
 	}
-	if m.limit != 0 {
-		if m.start >= 0 {
-			conditionExtra += fmt.Sprintf(" LIMIT %d,%d", m.start, m.limit)
-		} else {
-			conditionExtra += fmt.Sprintf(" LIMIT %d", m.limit)
+	// ORDER BY.
+	if m.orderBy != "" {
+		conditionExtra += " ORDER BY " + m.orderBy
+	}
+	// LIMIT.
+	if !isCountStatement {
+		if m.limit != 0 {
+			if m.start >= 0 {
+				conditionExtra += fmt.Sprintf(" LIMIT %d,%d", m.start, m.limit)
+			} else {
+				conditionExtra += fmt.Sprintf(" LIMIT %d", m.limit)
+			}
+		} else if limit1 {
+			conditionExtra += " LIMIT 1"
 		}
-	} else if limit1 {
-		conditionExtra += " LIMIT 1"
+
+		if m.offset >= 0 {
+			conditionExtra += fmt.Sprintf(" OFFSET %d", m.offset)
+		}
 	}
-	if m.offset >= 0 {
-		conditionExtra += fmt.Sprintf(" OFFSET %d", m.offset)
-	}
+
 	if m.lockInfo != "" {
 		conditionExtra += " " + m.lockInfo
 	}
 	return
 }
 
-// mergeArguments creates and returns new arguments by merging <m.extraArgs> and given <args>.
+// mergeArguments creates and returns new arguments by merging <m.extraArgs> and given `args`.
 func (m *Model) mergeArguments(args []interface{}) []interface{} {
 	if len(m.extraArgs) > 0 {
 		newArgs := make([]interface{}, len(m.extraArgs)+len(args))

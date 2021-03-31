@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -74,10 +74,14 @@ func (r *Response) ParseTplContent(content string, params ...gview.Params) (stri
 }
 
 // buildInVars merges build-in variables into <params> and returns the new template variables.
+// TODO performance improving.
 func (r *Response) buildInVars(params ...map[string]interface{}) map[string]interface{} {
-	m := gutil.MapMergeCopy(params...)
+	m := gutil.MapMergeCopy(r.Request.viewParams)
+	if len(params) > 0 {
+		gutil.MapMerge(m, params[0])
+	}
 	// Retrieve custom template variables from request object.
-	gutil.MapMerge(m, r.Request.viewParams, map[string]interface{}{
+	gutil.MapMerge(m, map[string]interface{}{
 		"Form":    r.Request.GetFormMap(),
 		"Query":   r.Request.GetQueryMap(),
 		"Request": r.Request.GetMap(),

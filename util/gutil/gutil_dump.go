@@ -1,4 +1,4 @@
-// Copyright 2017 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -14,6 +14,11 @@ import (
 	"os"
 	"reflect"
 )
+
+// apiVal is used for type assert api for Val().
+type apiVal interface {
+	Val() interface{}
+}
 
 // apiString is used for type assert api for String().
 type apiString interface {
@@ -36,37 +41,52 @@ func Dump(i ...interface{}) {
 // Export returns variables <i...> as a string with more manually readable.
 func Export(i ...interface{}) string {
 	buffer := bytes.NewBuffer(nil)
-	for _, v := range i {
-		switch r := v.(type) {
+	for _, value := range i {
+		switch r := value.(type) {
 		case []byte:
 			buffer.Write(r)
 		case string:
 			buffer.WriteString(r)
 		default:
 			var (
-				rv   = reflect.ValueOf(v)
-				kind = rv.Kind()
+				reflectValue = reflect.ValueOf(value)
+				reflectKind  = reflectValue.Kind()
 			)
-			if kind == reflect.Ptr {
-				rv = rv.Elem()
-				kind = rv.Kind()
+			for reflectKind == reflect.Ptr {
+				reflectValue = reflectValue.Elem()
+				reflectKind = reflectValue.Kind()
 			}
-			switch kind {
+			switch reflectKind {
 			case reflect.Slice, reflect.Array:
-				v = gconv.Interfaces(v)
+				value = gconv.Interfaces(value)
 			case reflect.Map:
-				v = gconv.Map(v)
+				value = gconv.Map(value)
 			case reflect.Struct:
-				if r, ok := v.(apiMapStrAny); ok {
-					v = r.MapStrAny()
-				} else if r, ok := v.(apiString); ok {
-					v = r.String()
+				converted := false
+				if r, ok := value.(apiVal); ok {
+					if result := r.Val(); result != nil {
+						value = result
+						converted = true
+					}
+				}
+				if !converted {
+					if r, ok := value.(apiMapStrAny); ok {
+						if result := r.MapStrAny(); result != nil {
+							value = result
+							converted = true
+						}
+					}
+				}
+				if !converted {
+					if r, ok := value.(apiString); ok {
+						value = r.String()
+					}
 				}
 			}
 			encoder := json.NewEncoder(buffer)
 			encoder.SetEscapeHTML(false)
 			encoder.SetIndent("", "\t")
-			if err := encoder.Encode(v); err != nil {
+			if err := encoder.Encode(value); err != nil {
 				fmt.Fprintln(os.Stderr, err.Error())
 			}
 		}

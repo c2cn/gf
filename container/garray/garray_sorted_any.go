@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -446,7 +446,7 @@ func (a *SortedArray) binSearch(value interface{}, lock bool) (index int, result
 	mid := 0
 	cmp := -2
 	for min <= max {
-		mid = (min + max) / 2
+		mid = min + int((max-min)/2)
 		cmp = a.getComparator()(value, a.array[mid])
 		switch {
 		case cmp < 0:
@@ -499,7 +499,7 @@ func (a *SortedArray) Clone() (newArray *SortedArray) {
 	array := make([]interface{}, len(a.array))
 	copy(array, a.array)
 	a.mu.RUnlock()
-	return NewSortedArrayFrom(array, a.comparator, !a.mu.IsSafe())
+	return NewSortedArrayFrom(array, a.comparator, a.mu.IsSafe())
 }
 
 // Clear deletes all items of current array.

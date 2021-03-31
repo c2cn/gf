@@ -1,4 +1,4 @@
-// Copyright 2018 gf Author(https://github.com/gogf/gf). All Rights Reserved.
+// Copyright GoFrame Author(https://goframe.org). All Rights Reserved.
 //
 // This Source Code Form is subject to the terms of the MIT License.
 // If a copy of the MIT was not distributed with this file,
@@ -7,14 +7,14 @@
 package gconv_test
 
 import (
-	"github.com/gogf/gf/internal/json"
-	"testing"
-	"time"
-
+	"github.com/gogf/gf/container/gvar"
 	"github.com/gogf/gf/frame/g"
+	"github.com/gogf/gf/internal/json"
 	"github.com/gogf/gf/os/gtime"
 	"github.com/gogf/gf/test/gtest"
 	"github.com/gogf/gf/util/gconv"
+	"testing"
+	"time"
 )
 
 func Test_Struct_Basic1(t *testing.T) {
@@ -374,7 +374,7 @@ func Test_Struct_PrivateAttribute(t *testing.T) {
 	})
 }
 
-func Test_StructDeep1(t *testing.T) {
+func Test_StructEmbedded1(t *testing.T) {
 	type Base struct {
 		Age int
 	}
@@ -394,25 +394,11 @@ func Test_StructDeep1(t *testing.T) {
 		t.Assert(err, nil)
 		t.Assert(user.Id, params["id"])
 		t.Assert(user.Name, params["name"])
-		t.Assert(user.Age, 0)
-	})
-
-	gtest.C(t, func(t *gtest.T) {
-		user := new(User)
-		params := g.Map{
-			"id":   1,
-			"name": "john",
-			"age":  18,
-		}
-		err := gconv.StructDeep(params, user)
-		t.Assert(err, nil)
-		t.Assert(user.Id, params["id"])
-		t.Assert(user.Name, params["name"])
-		t.Assert(user.Age, params["age"])
+		t.Assert(user.Age, 18)
 	})
 }
 
-func Test_StructDeep2(t *testing.T) {
+func Test_StructEmbedded2(t *testing.T) {
 	type Ids struct {
 		Id  int
 		Uid int
@@ -434,30 +420,13 @@ func Test_StructDeep2(t *testing.T) {
 		user := new(User)
 		err := gconv.Struct(params, user)
 		t.Assert(err, nil)
-		t.Assert(user.Id, 0)
-		t.Assert(user.Uid, 0)
-		t.Assert(user.Name, "john")
-	})
-
-	gtest.C(t, func(t *gtest.T) {
-		user := new(User)
-		err := gconv.StructDeep(params, user)
-		t.Assert(err, nil)
-		t.Assert(user.Id, 1)
-		t.Assert(user.Uid, 10)
-		t.Assert(user.Name, "john")
-	})
-	gtest.C(t, func(t *gtest.T) {
-		user := (*User)(nil)
-		err := gconv.StructDeep(params, &user)
-		t.Assert(err, nil)
 		t.Assert(user.Id, 1)
 		t.Assert(user.Uid, 10)
 		t.Assert(user.Name, "john")
 	})
 }
 
-func Test_StructDeep3(t *testing.T) {
+func Test_StructEmbedded3(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		type Ids struct {
 			Id  int `json:"id"`
@@ -482,7 +451,7 @@ func Test_StructDeep3(t *testing.T) {
 			"create_time": "2019",
 		}
 		user := new(User)
-		err := gconv.StructDeep(data, user)
+		err := gconv.Struct(data, user)
 		t.Assert(err, nil)
 		t.Assert(user.Id, 100)
 		t.Assert(user.Uid, 101)
@@ -492,7 +461,7 @@ func Test_StructDeep3(t *testing.T) {
 }
 
 // https://github.com/gogf/gf/issues/775
-func Test_StructDeep4(t *testing.T) {
+func Test_StructEmbedded4(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		type Sub2 struct {
 			SubName string
@@ -521,14 +490,14 @@ func Test_StructDeep4(t *testing.T) {
 			},
 		}
 		tx := new(Test)
-		if err := gconv.StructDeep(data, &tx); err != nil {
+		if err := gconv.Struct(data, &tx); err != nil {
 			panic(err)
 		}
 		t.Assert(tx, expect)
 	})
 }
 
-func Test_StructDeep5(t *testing.T) {
+func Test_StructEmbedded5(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		type Base struct {
 			Pass1 string `params:"password1"`
@@ -554,13 +523,18 @@ func Test_StructDeep5(t *testing.T) {
 		var err error
 		user1 := new(UserWithBase1)
 		user2 := new(UserWithBase2)
-		err = gconv.StructDeep(data, user1)
+		err = gconv.Struct(data, user1)
 		t.Assert(err, nil)
 		t.Assert(user1, &UserWithBase1{1, "john", Base{"123", "456"}})
 
-		err = gconv.StructDeep(data, user2)
+		err = gconv.Struct(data, user2)
 		t.Assert(err, nil)
-		t.Assert(user2, &UserWithBase2{1, "john", Base{"123", "456"}})
+		t.Assert(user2, &UserWithBase2{1, "john", Base{"", ""}})
+
+		var user3 *UserWithBase1
+		err = gconv.Struct(user1, &user3)
+		t.Assert(err, nil)
+		t.Assert(user3, user1)
 	})
 }
 
@@ -867,7 +841,7 @@ func Test_Struct_CatchPanic(t *testing.T) {
 			Result int
 		}
 		type User struct {
-			Score
+			Score Score
 		}
 
 		user := new(User)
@@ -875,38 +849,6 @@ func Test_Struct_CatchPanic(t *testing.T) {
 			"Score": 1,
 		}
 		err := gconv.Struct(scores, user)
-		t.AssertNE(err, nil)
-	})
-}
-
-type MyTime struct {
-	time.Time
-}
-
-type MyTimeSt struct {
-	ServiceDate MyTime
-}
-
-func (st *MyTimeSt) UnmarshalValue(v interface{}) error {
-	m := gconv.Map(v)
-	t, err := gtime.StrToTime(gconv.String(m["ServiceDate"]))
-	if err != nil {
-		return err
-	}
-	st.ServiceDate = MyTime{t.Time}
-	return nil
-}
-
-func Test_Struct_UnmarshalValue(t *testing.T) {
-	gtest.C(t, func(t *gtest.T) {
-		st := &MyTimeSt{}
-		err := gconv.Struct(g.Map{"ServiceDate": "2020-10-10 12:00:01"}, st)
-		t.Assert(err, nil)
-		t.Assert(st.ServiceDate.Time.Format("2006-01-02 15:04:05"), "2020-10-10 12:00:01")
-	})
-	gtest.C(t, func(t *gtest.T) {
-		st := &MyTimeSt{}
-		err := gconv.Struct(g.Map{"ServiceDate": nil}, st)
 		t.AssertNE(err, nil)
 	})
 }
@@ -927,14 +869,14 @@ type TestStruct struct {
 	TestInterface
 }
 
-func Test_Struct_WithInterfaceAttr(t *testing.T) {
+func Test_Struct_Embedded(t *testing.T) {
 	// Implemented interface attribute.
 	gtest.C(t, func(t *gtest.T) {
 		v1 := TestStruct{
 			TestInterface: &T{"john"},
 		}
 		v2 := g.Map{}
-		err := gconv.StructDeep(v2, &v1)
+		err := gconv.Struct(v2, &v1)
 		t.Assert(err, nil)
 		t.Assert(v1.Test(), "john")
 	})
@@ -946,7 +888,7 @@ func Test_Struct_WithInterfaceAttr(t *testing.T) {
 		v2 := g.Map{
 			"name": "test",
 		}
-		err := gconv.StructDeep(v2, &v1)
+		err := gconv.Struct(v2, &v1)
 		t.Assert(err, nil)
 		t.Assert(v1.Test(), "test")
 	})
@@ -956,9 +898,92 @@ func Test_Struct_WithInterfaceAttr(t *testing.T) {
 		v2 := g.Map{
 			"name": "test",
 		}
-		err := gconv.StructDeep(v2, &v1)
+		err := gconv.Struct(v2, &v1)
 		t.Assert(err, nil)
 		t.Assert(v1.TestInterface, nil)
+	})
+}
+
+func Test_Struct_Slice(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []int
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []int32
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []int64
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []uint
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []uint32
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []uint64
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []float32
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		type User struct {
+			Scores []float64
+		}
+		user := new(User)
+		array := g.Slice{1, 2, 3}
+		err := gconv.Struct(g.Map{"scores": array}, user)
+		t.Assert(err, nil)
+		t.Assert(user.Scores, array)
 	})
 }
 
@@ -1000,4 +1025,142 @@ func Test_Struct_WithJson(t *testing.T) {
 		t.Assert(err, nil)
 		t.Assert(b2, b1)
 	})
+}
+
+func Test_Struct_AttrStructHasTheSameTag(t *testing.T) {
+	type Product struct {
+		Id              int       `json:"id"`
+		UpdatedAt       time.Time `json:"-" `
+		UpdatedAtFormat string    `json:"updated_at" `
+	}
+
+	type Order struct {
+		Id        int       `json:"id"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Product   Product   `json:"products"`
+	}
+	gtest.C(t, func(t *gtest.T) {
+		data := g.Map{
+			"id":         1,
+			"updated_at": time.Now(),
+		}
+		order := new(Order)
+		err := gconv.Struct(data, order)
+		t.Assert(err, nil)
+		t.Assert(order.Id, data["id"])
+		t.Assert(order.UpdatedAt, data["updated_at"])
+		t.Assert(order.Product.Id, 0)
+		t.Assert(order.Product.UpdatedAt.IsZero(), true)
+		t.Assert(order.Product.UpdatedAtFormat, "")
+	})
+}
+
+func Test_Struct_DirectReflectSet(t *testing.T) {
+	type A struct {
+		Id   int
+		Name string
+	}
+
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			a = &A{
+				Id:   1,
+				Name: "john",
+			}
+			b *A
+		)
+		err := gconv.Struct(a, &b)
+		t.Assert(err, nil)
+		t.AssertEQ(a, b)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			a = A{
+				Id:   1,
+				Name: "john",
+			}
+			b A
+		)
+		err := gconv.Struct(a, &b)
+		t.Assert(err, nil)
+		t.AssertEQ(a, b)
+	})
+}
+
+func Test_Struct_NilEmbeddedStructAttribute(t *testing.T) {
+	type A struct {
+		Name string
+	}
+	type B struct {
+		*A
+		Id int
+	}
+
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			b *B
+		)
+		err := gconv.Struct(g.Map{
+			"id":   1,
+			"name": nil,
+		}, &b)
+		t.Assert(err, nil)
+		t.Assert(b.Id, 1)
+		t.Assert(b.Name, "")
+	})
+}
+
+func Test_Struct_JsonParam(t *testing.T) {
+	type A struct {
+		Id   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	// struct
+	gtest.C(t, func(t *gtest.T) {
+		var a = A{}
+		err := gconv.Struct([]byte(`{"id":1,"name":"john"}`), &a)
+		t.Assert(err, nil)
+		t.Assert(a.Id, 1)
+		t.Assert(a.Name, "john")
+	})
+	// *struct
+	gtest.C(t, func(t *gtest.T) {
+		var a = &A{}
+		err := gconv.Struct([]byte(`{"id":1,"name":"john"}`), a)
+		t.Assert(err, nil)
+		t.Assert(a.Id, 1)
+		t.Assert(a.Name, "john")
+	})
+	// *struct nil
+	gtest.C(t, func(t *gtest.T) {
+		var a *A
+		err := gconv.Struct([]byte(`{"id":1,"name":"john"}`), &a)
+		t.Assert(err, nil)
+		t.Assert(a.Id, 1)
+		t.Assert(a.Name, "john")
+	})
+}
+
+func Test_Struct_GVarAttribute(t *testing.T) {
+	type A struct {
+		Id     int    `json:"id"`
+		Name   string `json:"name"`
+		Status bool   `json:"status"`
+	}
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			a    = A{}
+			data = g.Map{
+				"id":     100,
+				"name":   "john",
+				"status": gvar.New(false),
+			}
+		)
+		err := gconv.Struct(data, &a)
+		t.Assert(err, nil)
+		t.Assert(a.Id, data["id"])
+		t.Assert(a.Name, data["name"])
+		t.Assert(a.Status, data["status"])
+	})
+
 }
