@@ -8,6 +8,7 @@ package ghttp
 
 import (
 	"bytes"
+	"context"
 	"github.com/gogf/gf/debug/gdebug"
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
@@ -70,15 +71,15 @@ func serverProcessInit() {
 	// Process message handler.
 	// It's enabled only graceful feature is enabled.
 	if gracefulEnabled {
-		intlog.Printf("%d: graceful reload feature is enabled", gproc.Pid())
+		intlog.Printf(context.TODO(), "%d: graceful reload feature is enabled", gproc.Pid())
 		go handleProcessMessage()
 	} else {
-		intlog.Printf("%d: graceful reload feature is disabled", gproc.Pid())
+		intlog.Printf(context.TODO(), "%d: graceful reload feature is disabled", gproc.Pid())
 	}
 
 	// It's an ugly calling for better initializing the main package path
 	// in source development environment. It is useful only be used in main goroutine.
-	// It fails retrieving the main package path in asynchronized goroutines.
+	// It fails retrieving the main package path in asynchronous goroutines.
 	gfile.MainPkgPath()
 }
 
@@ -193,9 +194,9 @@ func (s *Server) Start() error {
 
 	// If this is a child process, it then notifies its parent exit.
 	if gproc.IsChild() {
-		gtimer.SetTimeout(2*time.Second, func() {
+		gtimer.SetTimeout(time.Duration(s.config.GracefulTimeout)*time.Second, func() {
 			if err := gproc.Send(gproc.PPid(), []byte("exit"), adminGProcCommGroup); err != nil {
-				//glog.Error("server error in process communication:", err)
+				intlog.Error(context.TODO(), "server error in process communication:", err)
 			}
 		})
 	}
@@ -268,7 +269,7 @@ func (s *Server) GetRouterArray() []RouterItem {
 					item.Middleware += gdebug.FuncName(v)
 				}
 			}
-			// If the domain does not exist in the dump map, it create the map.
+			// If the domain does not exist in the dump map, it creates the map.
 			// The value of the map is a custom sorted array.
 			if _, ok := m[item.Domain]; !ok {
 				// Sort in ASC order.
@@ -315,9 +316,9 @@ func (s *Server) Run() {
 	// Remove plugins.
 	if len(s.plugins) > 0 {
 		for _, p := range s.plugins {
-			intlog.Printf(`remove plugin: %s`, p.Name())
+			intlog.Printf(context.TODO(), `remove plugin: %s`, p.Name())
 			if err := p.Remove(); err != nil {
-				intlog.Errorf("%+v", err)
+				intlog.Errorf(context.TODO(), "%+v", err)
 			}
 		}
 	}
@@ -333,7 +334,7 @@ func Wait() {
 		s := v.(*Server)
 		if len(s.plugins) > 0 {
 			for _, p := range s.plugins {
-				intlog.Printf(`remove plugin: %s`, p.Name())
+				intlog.Printf(context.TODO(), `remove plugin: %s`, p.Name())
 				p.Remove()
 			}
 		}
@@ -416,7 +417,7 @@ func (s *Server) startServer(fdMap listenerFdMap) {
 			s.servers = append(s.servers, s.newGracefulServer(itemFunc))
 		}
 	}
-	// Start listening asynchronizedly.
+	// Start listening asynchronously.
 	serverRunning.Add(1)
 	for _, v := range s.servers {
 		go func(server *gracefulServer) {

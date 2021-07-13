@@ -7,6 +7,7 @@
 package ghttp
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/gogf/gf/internal/intlog"
@@ -218,15 +219,19 @@ type ServerConfig struct {
 
 	// Graceful enables graceful reload feature for all servers of the process.
 	Graceful bool `json:"graceful"`
+
+	// GracefulTimeout set the maximum survival time (seconds) of the parent process.
+	GracefulTimeout uint8 `json:"gracefulTimeout"`
 }
 
+// Config creates and returns a ServerConfig object with default configurations.
 // Deprecated. Use NewConfig instead.
 func Config() ServerConfig {
 	return NewConfig()
 }
 
 // NewConfig creates and returns a ServerConfig object with default configurations.
-// Note that, do not define this default configuration to local package variable, as there're
+// Note that, do not define this default configuration to local package variable, as there are
 // some pointer attributes that may be shared in different servers.
 func NewConfig() ServerConfig {
 	return ServerConfig{
@@ -265,6 +270,7 @@ func NewConfig() ServerConfig {
 		FormParsingMemory:   1024 * 1024,     // 1MB
 		Rewrites:            make(map[string]string),
 		Graceful:            false,
+		GracefulTimeout:     2, // seconds
 	}
 }
 
@@ -327,10 +333,12 @@ func (s *Server) SetConfig(c ServerConfig) error {
 			return err
 		}
 	}
-	s.config.Logger.SetLevelStr(s.config.LogLevel)
+	if err := s.config.Logger.SetLevelStr(s.config.LogLevel); err != nil {
+		intlog.Error(context.TODO(), err)
+	}
 
 	SetGraceful(c.Graceful)
-	intlog.Printf("SetConfig: %+v", s.config)
+	intlog.Printf(context.TODO(), "SetConfig: %+v", s.config)
 	return nil
 }
 

@@ -7,22 +7,26 @@
 
 package gdb
 
-import (
-	"database/sql"
-)
-
-// GetMaster acts like function Master but with additional `schema` parameter specifying
+// MasterLink acts like function Master but with additional `schema` parameter specifying
 // the schema for the connection. It is defined for internal usage.
 // Also see Master.
-func (c *Core) GetMaster(schema ...string) (*sql.DB, error) {
-	return c.getSqlDb(true, schema...)
+func (c *Core) MasterLink(schema ...string) (Link, error) {
+	db, err := c.db.Master(schema...)
+	if err != nil {
+		return nil, err
+	}
+	return &dbLink{db}, nil
 }
 
-// GetSlave acts like function Slave but with additional `schema` parameter specifying
+// SlaveLink acts like function Slave but with additional `schema` parameter specifying
 // the schema for the connection. It is defined for internal usage.
 // Also see Slave.
-func (c *Core) GetSlave(schema ...string) (*sql.DB, error) {
-	return c.getSqlDb(false, schema...)
+func (c *Core) SlaveLink(schema ...string) (Link, error) {
+	db, err := c.db.Slave(schema...)
+	if err != nil {
+		return nil, err
+	}
+	return &dbLink{db}, nil
 }
 
 // QuoteWord checks given string `s` a word, if true quotes it with security chars of the database
@@ -57,12 +61,6 @@ func (c *Core) QuotePrefixTableName(table string) string {
 // It does nothing in default.
 func (c *Core) GetChars() (charLeft string, charRight string) {
 	return "", ""
-}
-
-// HandleSqlBeforeCommit handles the sql before posts it to database.
-// It does nothing in default.
-func (c *Core) HandleSqlBeforeCommit(sql string) string {
-	return sql
 }
 
 // Tables retrieves and returns the tables of current schema.

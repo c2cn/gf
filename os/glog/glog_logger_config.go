@@ -7,20 +7,20 @@
 package glog
 
 import (
-	"errors"
-	"fmt"
+	"io"
+	"strings"
+	"time"
+
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/internal/intlog"
 	"github.com/gogf/gf/os/gfile"
 	"github.com/gogf/gf/util/gconv"
 	"github.com/gogf/gf/util/gutil"
-	"io"
-	"strings"
-	"time"
 )
 
 // Config is the configuration object for logger.
 type Config struct {
+	Handlers             []Handler      `json:"-"`                    // Logger handlers which implement feature similar as middleware.
 	Writer               io.Writer      `json:"-"`                    // Customized io.Writer.
 	Flags                int            `json:"flags"`                // Extra flags for logging output features.
 	Path                 string         `json:"path"`                 // Logging directory path.
@@ -39,7 +39,7 @@ type Config struct {
 	RotateBackupLimit    int            `json:"rotateBackupLimit"`    // Max backup for rotated files, default is 0, means no backups.
 	RotateBackupExpire   time.Duration  `json:"rotateBackupExpire"`   // Max expire for rotated files, which is 0 in default, means no expiration.
 	RotateBackupCompress int            `json:"rotateBackupCompress"` // Compress level for rotated files using gzip algorithm. It's 0 in default, means no compression.
-	RotateCheckInterval  time.Duration  `json:"rotateCheckInterval"`  // Asynchronizely checks the backups and expiration at intervals. It's 1 hour in default.
+	RotateCheckInterval  time.Duration  `json:"rotateCheckInterval"`  // Asynchronous checks the backups and expiration at intervals. It's 1 hour in default.
 }
 
 // DefaultConfig returns the default configuration for logger.
@@ -69,18 +69,18 @@ func (l *Logger) SetConfig(config Config) error {
 	// Necessary validation.
 	if config.Path != "" {
 		if err := l.SetPath(config.Path); err != nil {
-			intlog.Error(err)
+			intlog.Error(l.ctx, err)
 			return err
 		}
 	}
-	intlog.Printf("SetConfig: %+v", l.config)
+	intlog.Printf(l.ctx, "SetConfig: %+v", l.config)
 	return nil
 }
 
 // SetConfigWithMap set configurations with map for the logger.
 func (l *Logger) SetConfigWithMap(m map[string]interface{}) error {
 	if m == nil || len(m) == 0 {
-		return errors.New("configuration cannot be empty")
+		return gerror.New("configuration cannot be empty")
 	}
 	// The m now is a shallow copy of m.
 	// A little tricky, isn't it?
@@ -91,7 +91,7 @@ func (l *Logger) SetConfigWithMap(m map[string]interface{}) error {
 		if level, ok := levelStringMap[strings.ToUpper(gconv.String(levelValue))]; ok {
 			m[levelKey] = level
 		} else {
-			return errors.New(fmt.Sprintf(`invalid level string: %v`, levelValue))
+			return gerror.Newf(`invalid level string: %v`, levelValue)
 		}
 	}
 	// Change string configuration to int value for file rotation size.
@@ -99,11 +99,10 @@ func (l *Logger) SetConfigWithMap(m map[string]interface{}) error {
 	if rotateSizeValue != nil {
 		m[rotateSizeKey] = gfile.StrToSize(gconv.String(rotateSizeValue))
 		if m[rotateSizeKey] == -1 {
-			return errors.New(fmt.Sprintf(`invalid rotate size: %v`, rotateSizeValue))
+			return gerror.Newf(`invalid rotate size: %v`, rotateSizeValue)
 		}
 	}
-	err := gconv.Struct(m, &l.config)
-	if err != nil {
+	if err := gconv.Struct(m, &l.config); err != nil {
 		return err
 	}
 	return l.SetConfig(l.config)
@@ -165,6 +164,24 @@ func (l *Logger) SetCtxKeys(keys ...interface{}) {
 	l.config.CtxKeys = keys
 }
 
+// AppendCtxKeys appends extra keys to logger.
+// It ignores the key if it is already appended to the logger previously.
+func (l *Logger) AppendCtxKeys(keys ...interface{}) {
+	var isExist bool
+	for _, key := range keys {
+		isExist = false
+		for _, ctxKey := range l.config.CtxKeys {
+			if ctxKey == key {
+				isExist = true
+				break
+			}
+		}
+		if !isExist {
+			l.config.CtxKeys = append(l.config.CtxKeys, key)
+		}
+	}
+}
+
 // GetCtxKeys retrieves and returns the context keys for logging.
 func (l *Logger) GetCtxKeys() []interface{} {
 	return l.config.CtxKeys
@@ -187,7 +204,7 @@ func (l *Logger) GetWriter() io.Writer {
 // SetPath sets the directory path for file logging.
 func (l *Logger) SetPath(path string) error {
 	if path == "" {
-		return errors.New("logging path is empty")
+		return gerror.New("logging path is empty")
 	}
 	if !gfile.Exists(path) {
 		if err := gfile.Mkdir(path); err != nil {
@@ -226,4 +243,9 @@ func (l *Logger) SetHeaderPrint(enabled bool) {
 // Prefix is part of header, which means if header output is shut, no prefix will be output.
 func (l *Logger) SetPrefix(prefix string) {
 	l.config.Prefix = prefix
+}
+
+// SetHandlers sets the logging handlers for current logger.
+func (l *Logger) SetHandlers(handlers ...Handler) {
+	l.config.Handlers = handlers
 }

@@ -8,7 +8,7 @@ package gview
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"github.com/gogf/gf/encoding/ghash"
 	"github.com/gogf/gf/errors/gerror"
@@ -54,7 +54,7 @@ var (
 
 // Parse parses given template file <file> with given template variables <params>
 // and returns the parsed template content.
-func (view *View) Parse(file string, params ...Params) (result string, err error) {
+func (view *View) Parse(ctx context.Context, file string, params ...Params) (result string, err error) {
 	var tpl interface{}
 	// It caches the file, folder and its content to enhance performance.
 	r := view.fileCacheMap.GetOrSetFuncLock(file, func() interface{} {
@@ -82,7 +82,7 @@ func (view *View) Parse(file string, params ...Params) (result string, err error
 				templates.Clear()
 				gfsnotify.Exit()
 			}); err != nil {
-				intlog.Error(err)
+				intlog.Error(ctx, err)
 			}
 		}
 		return &fileCacheItem{
@@ -125,6 +125,8 @@ func (view *View) Parse(file string, params ...Params) (result string, err error
 	if len(view.data) > 0 {
 		gutil.MapMerge(variables, view.data)
 	}
+	view.setI18nLanguageFromCtx(ctx, variables)
+
 	buffer := bytes.NewBuffer(nil)
 	if view.config.AutoEncode {
 		newTpl, err := tpl.(*htmltpl.Template).Clone()
@@ -142,18 +144,18 @@ func (view *View) Parse(file string, params ...Params) (result string, err error
 
 	// TODO any graceful plan to replace "<no value>"?
 	result = gstr.Replace(buffer.String(), "<no value>", "")
-	result = view.i18nTranslate(result, variables)
+	result = view.i18nTranslate(ctx, result, variables)
 	return result, nil
 }
 
 // ParseDefault parses the default template file with params.
-func (view *View) ParseDefault(params ...Params) (result string, err error) {
-	return view.Parse(view.config.DefaultFile, params...)
+func (view *View) ParseDefault(ctx context.Context, params ...Params) (result string, err error) {
+	return view.Parse(ctx, view.config.DefaultFile, params...)
 }
 
 // ParseContent parses given template content <content>  with template variables <params>
 // and returns the parsed content in []byte.
-func (view *View) ParseContent(content string, params ...Params) (string, error) {
+func (view *View) ParseContent(ctx context.Context, content string, params ...Params) (string, error) {
 	// It's not necessary continuing parsing if template content is empty.
 	if content == "" {
 		return "", nil
@@ -191,6 +193,8 @@ func (view *View) ParseContent(content string, params ...Params) (string, error)
 	if len(view.data) > 0 {
 		gutil.MapMerge(variables, view.data)
 	}
+	view.setI18nLanguageFromCtx(ctx, variables)
+
 	buffer := bytes.NewBuffer(nil)
 	if view.config.AutoEncode {
 		newTpl, err := tpl.(*htmltpl.Template).Clone()
@@ -207,7 +211,7 @@ func (view *View) ParseContent(content string, params ...Params) (string, error)
 	}
 	// TODO any graceful plan to replace "<no value>"?
 	result := gstr.Replace(buffer.String(), "<no value>", "")
-	result = view.i18nTranslate(result, variables)
+	result = view.i18nTranslate(ctx, result, variables)
 	return result, nil
 }
 
@@ -372,7 +376,7 @@ func (view *View) searchFile(file string) (path string, folder string, resource 
 		if errorPrint() {
 			glog.Error(buffer.String())
 		}
-		err = errors.New(fmt.Sprintf(`template file "%s" not found`, file))
+		err = gerror.Newf(`template file "%s" not found`, file)
 	}
 	return
 }

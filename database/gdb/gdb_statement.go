@@ -9,6 +9,7 @@ package gdb
 import (
 	"context"
 	"database/sql"
+
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/os/gtime"
 )
@@ -25,6 +26,7 @@ import (
 type Stmt struct {
 	*sql.Stmt
 	core *Core
+	link Link
 	sql  string
 }
 
@@ -35,7 +37,7 @@ const (
 )
 
 // doStmtCommit commits statement according to given `stmtType`.
-func (s *Stmt) doStmtCommit(stmtType string, ctx context.Context, args ...interface{}) (result interface{}, err error) {
+func (s *Stmt) doStmtCommit(ctx context.Context, stmtType string, args ...interface{}) (result interface{}, err error) {
 	var (
 		cancelFuncForTimeout context.CancelFunc
 		timestampMilli1      = gtime.TimestampMilli()
@@ -62,19 +64,21 @@ func (s *Stmt) doStmtCommit(stmtType string, ctx context.Context, args ...interf
 	var (
 		timestampMilli2 = gtime.TimestampMilli()
 		sqlObj          = &Sql{
-			Sql:    s.sql,
-			Type:   stmtType,
-			Args:   args,
-			Format: FormatSqlWithArgs(s.sql, args),
-			Error:  err,
-			Start:  timestampMilli1,
-			End:    timestampMilli2,
-			Group:  s.core.db.GetGroup(),
+			Sql:           s.sql,
+			Type:          stmtType,
+			Args:          args,
+			Format:        FormatSqlWithArgs(s.sql, args),
+			Error:         err,
+			Start:         timestampMilli1,
+			End:           timestampMilli2,
+			Group:         s.core.db.GetGroup(),
+			IsTransaction: s.link.IsTransaction(),
 		}
 	)
+	// Tracing and logging.
 	s.core.addSqlToTracing(ctx, sqlObj)
 	if s.core.db.GetDebug() {
-		s.core.writeSqlToLogger(sqlObj)
+		s.core.writeSqlToLogger(ctx, sqlObj)
 	}
 	return result, err
 }
@@ -82,7 +86,7 @@ func (s *Stmt) doStmtCommit(stmtType string, ctx context.Context, args ...interf
 // ExecContext executes a prepared statement with the given arguments and
 // returns a Result summarizing the effect of the statement.
 func (s *Stmt) ExecContext(ctx context.Context, args ...interface{}) (sql.Result, error) {
-	result, err := s.doStmtCommit(stmtTypeExecContext, ctx, args...)
+	result, err := s.doStmtCommit(ctx, stmtTypeExecContext, args...)
 	if result != nil {
 		return result.(sql.Result), err
 	}
@@ -92,7 +96,7 @@ func (s *Stmt) ExecContext(ctx context.Context, args ...interface{}) (sql.Result
 // QueryContext executes a prepared query statement with the given arguments
 // and returns the query results as a *Rows.
 func (s *Stmt) QueryContext(ctx context.Context, args ...interface{}) (*sql.Rows, error) {
-	result, err := s.doStmtCommit(stmtTypeQueryContext, ctx, args...)
+	result, err := s.doStmtCommit(ctx, stmtTypeQueryContext, args...)
 	if result != nil {
 		return result.(*sql.Rows), err
 	}
@@ -106,7 +110,7 @@ func (s *Stmt) QueryContext(ctx context.Context, args ...interface{}) (*sql.Rows
 // Otherwise, the *Row's Scan scans the first selected row and discards
 // the rest.
 func (s *Stmt) QueryRowContext(ctx context.Context, args ...interface{}) *sql.Row {
-	result, _ := s.doStmtCommit(stmtTypeQueryRowContext, ctx, args...)
+	result, _ := s.doStmtCommit(ctx, stmtTypeQueryRowContext, args...)
 	if result != nil {
 		return result.(*sql.Row)
 	}
